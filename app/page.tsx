@@ -73,12 +73,6 @@ export default function Home() {
     });
   }, []);
 
-  const addPendingFiles = useCallback((incoming: FileList | File[] | null) => {
-    if (!incoming) return;
-    const list = Array.from(incoming);
-    if (list.length) setPendingFiles((prev) => [...prev, ...list]);
-  }, []);
-
   const removePendingFile = useCallback((index: number) => {
     setPendingFiles((prev) => prev.filter((_, i) => i !== index));
   }, []);
@@ -224,17 +218,32 @@ export default function Home() {
     setIsDragging(false);
   }, []);
 
+  // Dropped/browsed files start transcribing right away — the Transcribe button
+  // is only there for recordings, which land in pendingFiles. Any recording
+  // already waiting comes along, since the intake view is about to disappear.
+  const startUploads = useCallback(
+    (files: File[]) => {
+      if (!files.length) return;
+      startFiles([...pendingFiles, ...files]);
+      setPendingFiles([]);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    },
+    [pendingFiles, startFiles],
+  );
+
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
       setIsDragging(false);
-      addPendingFiles(e.dataTransfer.files);
+      // Dropping mid-recording would swap the intake view out from under it
+      if (isRecording) return;
+      startUploads(Array.from(e.dataTransfer.files));
     },
-    [addPendingFiles],
+    [isRecording, startUploads],
   );
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    addPendingFiles(e.target.files);
+    startUploads(Array.from(e.target.files ?? []));
     e.target.value = "";
   };
 

@@ -1,10 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { OTHER_LANGS } from "@/lib/audio";
 
 export type Locale = "en" | "es";
-
-export const MAX_FILE_SIZE_MB = 50;
 
 const STORAGE_KEY = "transcribaudio-locale";
 
@@ -44,6 +43,7 @@ const translations = {
     improve: "Improve with AI",
     improving: "Improving...",
     undo: "Undo",
+    fileTooLarge: "This file is larger than the limit of",
     // Transcription language names
     autoDetect: "Auto-detect",
     lang_en: "English",
@@ -103,6 +103,7 @@ const translations = {
     improve: "Mejorar con IA",
     improving: "Mejorando...",
     undo: "Deshacer",
+    fileTooLarge: "Este archivo supera el límite de",
     // Nombres de idiomas de transcripción
     autoDetect: "Detección automática",
     lang_en: "Inglés",
@@ -127,31 +128,6 @@ const translations = {
     lang_fi: "Finlandés",
   },
 } satisfies Record<Locale, Record<string, string>>;
-
-// Language values that are pinned to the top of the dropdown
-const FEATURED_LANGS = ["en", "es"];
-
-// All other transcription language values in order
-const OTHER_LANGS = [
-  "en_us",
-  "en_uk",
-  "en_au",
-  "fr",
-  "de",
-  "it",
-  "pt",
-  "nl",
-  "hi",
-  "ja",
-  "zh",
-  "ko",
-  "pl",
-  "ru",
-  "tr",
-  "uk",
-  "vi",
-  "fi",
-];
 
 export function buildLanguageOptions(locale: Locale, t: Record<string, string>) {
   // Show locale's own language first, then the other featured language
@@ -181,5 +157,3 @@ export function useLocale() {
 
   return { locale, setLocale, t };
 }
-
-export { FEATURED_LANGS, OTHER_LANGS };

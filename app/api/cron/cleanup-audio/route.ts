@@ -1,19 +1,27 @@
+import { timingSafeEqual } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { NextRequest, NextResponse } from "next/server";
+import { AUDIO_BUCKET as BUCKET } from "@/lib/audio";
+import { serverEnv } from "@/lib/env";
+import { serviceSupabase } from "@/lib/supabase.server";
 
-const BUCKET = "audio-files";
 const SAMPLE_OBJECT = "sample.ogg";
 const LIST_PAGE_SIZE = 1000;
 const REMOVE_BATCH_SIZE = 100;
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-);
+// Vercel sends `Authorization: Bearer $CRON_SECRET` on scheduled invocations.
+// Fails closed: with no secret configured, nobody can trigger the wipe.
+function isAuthorized(req: NextRequest) {
+  const secret = serverEnv().CRON_SECRET;
+  if (!secret) return false;
+  const expected = Buffer.from(`Bearer ${secret}`);
+  const actual = Buffer.from(req.headers.get("authorization") ?? "");
+  return actual.length === expected.length && timingSafeEqual(actual, expected);
+}
 
 async function collectObjectPaths(folderPath: string): Promise<string[]> {
+  const supabase = serviceSupabase();
   const paths: string[] = [];
   let offset = 0;
 
@@ -50,7 +58,13 @@ async function collectObjectPaths(folderPath: string): Promise<string[]> {
   return paths;
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  if (!isAuthorized(req)) {
+    if (!serverEnv().CRON_SECRET) console.error("[cleanup-audio] CRON_SECRET is not set");
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const supabase = serviceSupabase();
   try {
     const samplePath = join(process.cwd(), "public", SAMPLE_OBJECT);
     const sampleBytes = await readFile(samplePath);

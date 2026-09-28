@@ -1,13 +1,9 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import { createClient } from "@supabase/supabase-js";
-import { useLocale, buildLanguageOptions, MAX_FILE_SIZE_MB, type Locale } from "@/lib/i18n";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
+import { AUDIO_BUCKET, MAX_FILE_SIZE_BYTES, MAX_FILE_SIZE_MB } from "@/lib/audio";
+import { useLocale, buildLanguageOptions, type Locale } from "@/lib/i18n";
+import { browserSupabase } from "@/lib/supabase";
 
 // How many files upload/transcribe at the same time
 const MAX_CONCURRENT = 3;
@@ -26,6 +22,8 @@ type Job = {
   improveCooldown: boolean;
   copied: boolean;
   error: string;
+  // False for jobs that can never succeed (e.g. over the size limit)
+  retryable: boolean;
 };
 
 function formatTime(seconds: number) {
@@ -88,7 +86,7 @@ export default function Home() {
         const urlRes = await fetch("/api/upload-url", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ filename: file.name }),
+          body: JSON.stringify({ filename: file.name, size: file.size }),
         });
 
         if (!urlRes.ok) {
@@ -100,25 +98,20 @@ export default function Home() {
         if (stale()) return;
 
         // 2. Upload directly to Supabase using the signed URL
-        const { error: uploadError } = await supabase.storage
-          .from("audio-files")
+        const { error: uploadError } = await browserSupabase()
+          .storage.from(AUDIO_BUCKET)
           .uploadToSignedUrl(path, token, file, { contentType: file.type });
 
         if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
         if (stale()) return;
 
-        // 3. Get the public URL
-        const {
-          data: { publicUrl },
-        } = supabase.storage.from("audio-files").getPublicUrl(path);
-
-        // 4. Submit for transcription
+        // 3. Submit for transcription (the server resolves the path to a URL)
         updateJob(id, { status: "processing" });
 
         const transcribeRes = await fetch("/api/transcribe", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ audioUrl: publicUrl, languageCode }),
+          body: JSON.stringify({ path, languageCode }),
         });
 
         if (!transcribeRes.ok) {
@@ -128,7 +121,7 @@ export default function Home() {
 
         const { transcriptId } = await transcribeRes.json();
 
-        // 5. Poll for completion
+        // 4. Poll for completion
         while (!stale()) {
           const res = await fetch(`/api/transcription/${transcriptId}`);
           const data = await res.json();
@@ -174,32 +167,37 @@ export default function Home() {
       if (!files.length) return;
       setGlobalError("");
 
-      const entries = files.map((file) => {
-        const id = crypto.randomUUID();
-        jobFilesRef.current.set(id, file);
-        return { id, file };
-      });
+      const entries = files.map((file) => ({
+        id: crypto.randomUUID(),
+        file,
+        tooLarge: file.size > MAX_FILE_SIZE_BYTES,
+      }));
+      // Oversized files get a visible failed card instead of an upload that
+      // would fail deep in the flow
+      const runnable = entries.filter((entry) => !entry.tooLarge);
+      for (const { id, file } of runnable) jobFilesRef.current.set(id, file);
 
       setJobs((prev) => [
         ...prev,
-        ...entries.map(({ id, file }) => ({
+        ...entries.map(({ id, file, tooLarge }) => ({
           id,
           name: file.name,
           size: file.size,
-          status: "queued" as JobStatus,
+          status: (tooLarge ? "error" : "queued") as JobStatus,
           transcript: "",
           originalTranscript: "",
           isImproved: false,
           isImproving: false,
           improveCooldown: false,
           copied: false,
-          error: "",
+          error: tooLarge ? `${t.fileTooLarge} ${MAX_FILE_SIZE_MB} MB` : "",
+          retryable: !tooLarge,
         })),
       ]);
 
-      void runJobs(entries, language);
+      if (runnable.length) void runJobs(runnable, language);
     },
-    [language, runJobs],
+    [language, runJobs, t],
   );
 
   const handleSubmit = () => {
@@ -712,12 +710,14 @@ export default function Home() {
                       <div className="bg-red-50 border border-red-200 rounded-lg p-3">
                         <p className="text-red-700 text-sm font-medium">{t.errorTitle}</p>
                         <p className="text-red-600 text-sm mt-0.5">{job.error}</p>
-                        <button
-                          onClick={() => handleRetry(job.id)}
-                          className="text-red-600 text-sm font-medium mt-2 hover:underline"
-                        >
-                          {t.tryAgain}
-                        </button>
+                        {job.retryable && (
+                          <button
+                            onClick={() => handleRetry(job.id)}
+                            className="text-red-600 text-sm font-medium mt-2 hover:underline"
+                          >
+                            {t.tryAgain}
+                          </button>
+                        )}
                       </div>
                     )}
 

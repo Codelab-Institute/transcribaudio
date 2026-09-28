@@ -1,13 +1,9 @@
 "use client";
 
 import { FormEvent, useRef, useState } from "react";
-import { createClient } from "@supabase/supabase-js";
 import Image from "next/image";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
+import { AUDIO_BUCKET, MAX_FILE_SIZE_BYTES } from "@/lib/audio";
+import { browserSupabase } from "@/lib/supabase";
 
 export default function ExpansionPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -43,10 +39,13 @@ export default function ExpansionPage() {
     processingAbortRef.current = controller;
     try {
       if (processingRunIdRef.current !== runId) return;
+      if (file.size > MAX_FILE_SIZE_BYTES) {
+        throw new Error("La grabacion es demasiado larga.");
+      }
       const urlRes = await fetch("/api/upload-url", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filename: file.name }),
+        body: JSON.stringify({ filename: file.name, size: file.size }),
         signal: controller.signal,
       });
       if (processingRunIdRef.current !== runId) return;
@@ -54,19 +53,15 @@ export default function ExpansionPage() {
       if (!urlRes.ok) throw new Error(urlData.error ?? "No se pudo obtener URL de carga.");
 
       const { token, path } = urlData as { token: string; path: string };
-      const { error: uploadError } = await supabase.storage
-        .from("audio-files")
+      const { error: uploadError } = await browserSupabase()
+        .storage.from(AUDIO_BUCKET)
         .uploadToSignedUrl(path, token, file, { contentType: file.type });
       if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
-
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from("audio-files").getPublicUrl(path);
 
       const transcribeRes = await fetch("/api/transcribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ audioUrl: publicUrl, languageCode: "auto" }),
+        body: JSON.stringify({ path, languageCode: "auto" }),
         signal: controller.signal,
       });
       if (processingRunIdRef.current !== runId) return;

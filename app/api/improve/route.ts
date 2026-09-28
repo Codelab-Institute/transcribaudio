@@ -1,8 +1,9 @@
 import Groq from "groq-sdk";
 import { NextRequest, NextResponse } from "next/server";
+import { parseBody } from "@/lib/api";
+import { serverEnv } from "@/lib/env";
 import { GROQ_MODEL } from "@/lib/groq";
-
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY ?? "" });
+import { textRequest } from "@/lib/schemas";
 
 const MAX_RETRIES = 3;
 const SYSTEM_PROMPT =
@@ -15,13 +16,12 @@ const SYSTEM_PROMPT =
   `Return ONLY the improved text with no extra commentary.`;
 
 export async function POST(req: NextRequest) {
+  const parsed = await parseBody(req, textRequest);
+  if ("response" in parsed) return parsed.response;
+  const { text } = parsed.data;
+  const groq = new Groq({ apiKey: serverEnv().GROQ_API_KEY });
+
   try {
-    const { text } = await req.json();
-
-    if (!text || typeof text !== "string") {
-      return NextResponse.json({ error: "Missing text" }, { status: 400 });
-    }
-
     console.log(`[improve] Request received — ${text.length} chars of input text`);
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {

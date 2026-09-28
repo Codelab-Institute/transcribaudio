@@ -1,15 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AssemblyAI } from "assemblyai";
-
-const client = new AssemblyAI({ apiKey: process.env.ASSEMBLYAI_API_KEY! });
+import { serverEnv } from "@/lib/env";
+import { transcriptionId } from "@/lib/schemas";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const transcript = await client.transcripts.get(id);
+  const parsed = transcriptionId.safeParse((await params).id);
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid transcript id" }, { status: 400 });
+  }
 
-  return NextResponse.json({
-    status: transcript.status,
-    text: transcript.text,
-    error: transcript.error,
-  });
+  const client = new AssemblyAI({ apiKey: serverEnv().ASSEMBLYAI_API_KEY });
+
+  try {
+    const transcript = await client.transcripts.get(parsed.data);
+    return NextResponse.json({
+      status: transcript.status,
+      text: transcript.text,
+      error: transcript.error,
+    });
+  } catch (err) {
+    console.error("[transcription] Status check failed:", err);
+    return NextResponse.json({ error: "Failed to check transcription" }, { status: 502 });
+  }
 }

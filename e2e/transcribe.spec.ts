@@ -116,3 +116,15 @@ test("the drop zone is reachable and operable from the keyboard", async ({ page 
   await page.keyboard.press("Enter");
   expect((await chooser).isMultiple()).toBe(true);
 });
+
+test("the chosen UI language survives a reload", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "ES", exact: true }).click();
+  await expect(page.getByText("Sube archivos de audio y obtén transcripciones")).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByText("Sube archivos de audio y obtén transcripciones")).toBeVisible();
+
+  await page.getByRole("button", { name: "EN", exact: true }).click();
+  await expect(page.getByText("Upload audio files and get transcripts")).toBeVisible();
+});

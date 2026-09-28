@@ -2,6 +2,15 @@
 
 import { useCallback, useRef, useState } from "react";
 
+type TimerRef = { current: ReturnType<typeof setInterval> | null };
+
+function clearTimer(timerRef: TimerRef) {
+  if (timerRef.current) {
+    clearInterval(timerRef.current);
+    timerRef.current = null;
+  }
+}
+
 // MediaRecorder + elapsed-seconds timer. Hands each finished recording to
 // onRecorded as a File named recording-<ts>.<ext>.
 export function useRecorder(onRecorded: (file: File) => void, onError: (message: string) => void) {
@@ -11,13 +20,6 @@ export function useRecorder(onRecorded: (file: File) => void, onError: (message:
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-
-  const clearTimer = () => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-  };
 
   const start = useCallback(async () => {
     try {
@@ -53,13 +55,13 @@ export function useRecorder(onRecorded: (file: File) => void, onError: (message:
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
-      clearTimer();
+      clearTimer(timerRef);
     }
   }, [isRecording]);
 
   // Drops any in-progress recording without keeping it
   const cancel = useCallback(() => {
-    clearTimer();
+    clearTimer(timerRef);
     streamRef.current?.getTracks().forEach((track) => track.stop());
     setIsRecording(false);
     setRecordingTime(0);

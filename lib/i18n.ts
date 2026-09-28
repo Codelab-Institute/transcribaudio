@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 import { OTHER_LANGS } from "@/lib/audio";
 
 export type Locale = "en" | "es";
@@ -142,17 +142,43 @@ export function buildLanguageOptions(locale: Locale, t: Record<string, string>) 
   };
 }
 
-export function useLocale() {
-  const [locale, setLocaleState] = useState<Locale>("en");
+// The saved locale lives in localStorage; this tiny store lets every
+// useLocale() caller read it without a setState-in-effect on mount.
+const localeListeners = new Set<() => void>();
+// Fallback for when localStorage throws (private mode, blocked storage)
+let memoryLocale: Locale = "en";
 
-  useEffect(() => {
+function readStoredLocale(): Locale {
+  try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored === "en" || stored === "es") setLocaleState(stored);
-  }, []);
+    if (stored === "en" || stored === "es") return stored;
+  } catch {
+    // fall through
+  }
+  return memoryLocale;
+}
+
+function subscribeLocale(listener: () => void) {
+  localeListeners.add(listener);
+  window.addEventListener("storage", listener);
+  return () => {
+    localeListeners.delete(listener);
+    window.removeEventListener("storage", listener);
+  };
+}
+
+export function useLocale() {
+  // The server (and first client render) always use "en" to match the HTML
+  const locale = useSyncExternalStore(subscribeLocale, readStoredLocale, () => "en" as Locale);
 
   const setLocale = useCallback((next: Locale) => {
-    setLocaleState(next);
-    localStorage.setItem(STORAGE_KEY, next);
+    memoryLocale = next;
+    try {
+      localStorage.setItem(STORAGE_KEY, next);
+    } catch {
+      // Storage unavailable; memoryLocale keeps the choice for this session
+    }
+    localeListeners.forEach((listener) => listener());
   }, []);
 
   const t = translations[locale];

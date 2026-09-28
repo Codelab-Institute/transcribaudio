@@ -129,6 +129,8 @@ const translations = {
   },
 } satisfies Record<Locale, Record<string, string>>;
 
+export type Translations = (typeof translations)[Locale];
+
 export function buildLanguageOptions(locale: Locale, t: Record<string, string>) {
   // Show locale's own language first, then the other featured language
   const featured = locale === "es" ? ["es", "en"] : ["en", "es"];

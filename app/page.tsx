@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback } from "react";
 import { AUDIO_BUCKET, MAX_FILE_SIZE_BYTES, MAX_FILE_SIZE_MB } from "@/lib/audio";
+import { formatTime } from "@/lib/format";
 import { useLocale, buildLanguageOptions, type Locale } from "@/lib/i18n";
 import { browserSupabase } from "@/lib/supabase";
 
@@ -26,12 +27,17 @@ type Job = {
   retryable: boolean;
 };
 
-function formatTime(seconds: number) {
-  const m = Math.floor(seconds / 60)
-    .toString()
-    .padStart(2, "0");
-  const s = (seconds % 60).toString().padStart(2, "0");
-  return `${m}:${s}`;
+function spinner(className: string) {
+  return (
+    <svg className={`animate-spin ${className}`} fill="none" viewBox="0 0 24 24" aria-hidden="true">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path
+        className="opacity-75"
+        fill="currentColor"
+        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+      />
+    </svg>
+  );
 }
 
 export default function Home() {
@@ -240,6 +246,12 @@ export default function Home() {
     [isRecording, startUploads],
   );
 
+  const openFilePicker = () => {
+    if (!isRecording) fileInputRef.current?.click();
+  };
+
+  const openMorePicker = () => moreInputRef.current?.click();
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     startUploads(Array.from(e.target.files ?? []));
     e.target.value = "";
@@ -382,17 +394,6 @@ export default function Home() {
     (job) => job.status === "queued" || job.status === "uploading" || job.status === "processing",
   ).length;
 
-  const spinner = (className: string) => (
-    <svg className={`animate-spin ${className}`} fill="none" viewBox="0 0 24 24">
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-      <path
-        className="opacity-75"
-        fill="currentColor"
-        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-      />
-    </svg>
-  );
-
   return (
     <main className="min-h-screen bg-slate-50 flex items-start justify-center pt-16 px-4 pb-16">
       <div className="w-full max-w-2xl">
@@ -426,13 +427,17 @@ export default function Home() {
             <>
               {/* Language */}
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                <label
+                  htmlFor="language"
+                  className="block text-sm font-medium text-slate-700 mb-1.5"
+                >
                   {t.languageLabel}
                 </label>
                 {(() => {
                   const { autoDetect, featured, others } = buildLanguageOptions(locale, t);
                   return (
                     <select
+                      id="language"
                       value={language}
                       onChange={(e) => setLanguage(e.target.value)}
                       className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -456,38 +461,46 @@ export default function Home() {
 
               {/* File drop zone */}
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                <p
+                  id="audio-files-label"
+                  className="block text-sm font-medium text-slate-700 mb-1.5"
+                >
                   {t.audioFileLabel}
-                </label>
-                <div
+                </p>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="audio/*,video/*"
+                  multiple
+                  onChange={handleFileChange}
+                  className="hidden"
+                  disabled={isRecording}
+                  tabIndex={-1}
+                  aria-hidden="true"
+                />
+                <button
+                  type="button"
+                  aria-labelledby="audio-files-label drop-hint"
+                  disabled={isRecording}
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
-                  onClick={() => !isRecording && fileInputRef.current?.click()}
+                  onClick={openFilePicker}
                   className={[
-                    "border-2 border-dashed rounded-xl p-10 text-center transition-colors",
+                    "block w-full border-2 border-dashed rounded-xl p-10 text-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
                     isDragging
                       ? "border-blue-400 bg-blue-50"
                       : "border-slate-200 hover:border-slate-300 hover:bg-slate-50",
                     isRecording ? "opacity-50 cursor-not-allowed" : "cursor-pointer",
                   ].join(" ")}
                 >
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="audio/*,video/*"
-                    multiple
-                    onChange={handleFileChange}
-                    className="hidden"
-                    disabled={isRecording}
-                  />
-
-                  <div className="flex items-center justify-center mb-3">
+                  <span className="flex items-center justify-center mb-3">
                     <svg
                       className="w-10 h-10 text-slate-300"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
+                      aria-hidden="true"
                     >
                       <path
                         strokeLinecap="round"
@@ -496,14 +509,16 @@ export default function Home() {
                         d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
                       />
                     </svg>
-                  </div>
-                  <p className="text-slate-600 font-medium text-sm">{t.dropPrompt}</p>
-                  <p className="text-slate-400 text-xs mt-1">{t.dropBrowse}</p>
-                  <p className="text-slate-400 text-xs mt-2">{t.dropFormats}</p>
-                  <p className="text-slate-400 text-xs mt-1">
+                  </span>
+                  <span id="drop-hint" className="block text-slate-600 font-medium text-sm">
+                    {t.dropPrompt}
+                  </span>
+                  <span className="block text-slate-400 text-xs mt-1">{t.dropBrowse}</span>
+                  <span className="block text-slate-400 text-xs mt-2">{t.dropFormats}</span>
+                  <span className="block text-slate-400 text-xs mt-1">
                     {t.upTo} {MAX_FILE_SIZE_MB} MB {t.upToEach}
-                  </p>
-                </div>
+                  </span>
+                </button>
               </div>
 
               {/* Selected files */}
@@ -624,10 +639,10 @@ export default function Home() {
           {hasJobs && (
             <>
               <div className="flex items-center justify-between gap-3">
-                <label className="text-base font-semibold text-slate-800">
+                <h2 className="text-base font-semibold text-slate-800">
                   {t.transcriptLabel}
                   {jobs.length > 1 ? ` · ${doneCount}/${jobs.length}` : ""}
-                </label>
+                </h2>
                 {doneCount > 1 && (
                   <button
                     onClick={handleCopyAll}
@@ -821,13 +836,17 @@ export default function Home() {
               {/* New audio — click to browse or drop straight onto the button */}
               <div className="pt-2 border-t border-slate-200 space-y-3">
                 <div className="flex items-center gap-2">
-                  <label className="text-xs font-medium text-slate-500 shrink-0">
+                  <label
+                    htmlFor="language-more"
+                    className="text-xs font-medium text-slate-500 shrink-0"
+                  >
                     {t.languageLabel}
                   </label>
                   {(() => {
                     const { autoDetect, featured, others } = buildLanguageOptions(locale, t);
                     return (
                       <select
+                        id="language-more"
                         value={language}
                         onChange={(e) => setLanguage(e.target.value)}
                         className="px-2 py-1 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -849,7 +868,18 @@ export default function Home() {
                   })()}
                 </div>
 
-                <div
+                <input
+                  ref={moreInputRef}
+                  type="file"
+                  accept="audio/*,video/*"
+                  multiple
+                  onChange={handleMoreChange}
+                  className="hidden"
+                  tabIndex={-1}
+                  aria-hidden="true"
+                />
+                <button
+                  type="button"
                   onDragOver={(e) => {
                     e.preventDefault();
                     setIsDraggingMore(true);
@@ -859,24 +889,22 @@ export default function Home() {
                     setIsDraggingMore(false);
                   }}
                   onDrop={handleDropMore}
-                  onClick={() => moreInputRef.current?.click()}
+                  onClick={openMorePicker}
                   className={[
-                    "w-full py-3 px-4 rounded-lg border-2 border-dashed cursor-pointer transition-colors flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 text-sm font-medium",
+                    "w-full py-3 px-4 rounded-lg border-2 border-dashed cursor-pointer transition-colors flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
                     isDraggingMore
                       ? "border-blue-400 bg-blue-50 text-blue-700"
                       : "border-slate-300 text-slate-700 hover:border-slate-400 hover:bg-slate-50 active:bg-slate-100",
                   ].join(" ")}
                 >
-                  <input
-                    ref={moreInputRef}
-                    type="file"
-                    accept="audio/*,video/*"
-                    multiple
-                    onChange={handleMoreChange}
-                    className="hidden"
-                  />
                   <span className="flex items-center gap-2">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                    >
                       <path
                         strokeLinecap="round"
                         strokeLinejoin="round"
@@ -887,7 +915,7 @@ export default function Home() {
                     {t.newFile}
                   </span>
                   <span className="text-xs font-normal text-slate-400">{t.orDropFiles}</span>
-                </div>
+                </button>
 
                 <button
                   onClick={reset}

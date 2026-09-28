@@ -3,6 +3,7 @@
 import { FormEvent, useRef, useState } from "react";
 import Image from "next/image";
 import { AUDIO_BUCKET, MAX_FILE_SIZE_BYTES } from "@/lib/audio";
+import { formatTime } from "@/lib/format";
 import { browserSupabase } from "@/lib/supabase";
 
 export default function ExpansionPage() {
@@ -23,14 +24,6 @@ export default function ExpansionPage() {
   const skipProcessOnStopRef = useRef(false);
   const processingAbortRef = useRef<AbortController | null>(null);
   const processingRunIdRef = useRef(0);
-
-  const formatTime = (seconds: number) => {
-    const m = Math.floor(seconds / 60)
-      .toString()
-      .padStart(2, "0");
-    const s = (seconds % 60).toString().padStart(2, "0");
-    return `${m}:${s}`;
-  };
 
   const processRecordedFile = async (file: File, runId: number) => {
     setError("");

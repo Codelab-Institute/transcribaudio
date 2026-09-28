@@ -78,13 +78,13 @@ export async function POST(req: NextRequest) {
     });
 
     const output = completion.choices[0]?.message?.content ?? "";
-    const parsed = parseJsonObject(output);
+    const extracted = parseJsonObject(output);
 
-    if (!parsed) {
+    if (!extracted) {
       return NextResponse.json({ error: "Failed to parse structured output" }, { status: 500 });
     }
 
-    return NextResponse.json(parsed);
+    return NextResponse.json(extracted);
   } catch (err: unknown) {
     const status = (err as { status?: number }).status;
     if (status === 429) {

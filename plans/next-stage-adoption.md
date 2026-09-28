@@ -2,7 +2,9 @@
 
 **Reference:** [Kazuki-tam/next-stage](https://github.com/Kazuki-tam/next-stage) — a Next.js 16 starter template built around AI-assisted development, type safety, and code quality.
 
-**Status:** Proposal. Nothing here is implemented yet.
+**Status:** Mostly implemented on 2026-09-28 (branch `next-stage-adoption`). Done: P0.1, P0.2
+step 1, P0.3, all of P1, all of P2, and the Dependabot half of P3's supply-chain item.
+Not done: P0.2 steps 2–3 (rate limiting, BotID), the rest of P3.
 **Written:** 2026-08-17
 
 ---

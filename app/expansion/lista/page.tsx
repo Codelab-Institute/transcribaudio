@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { serviceSupabase } from "@/lib/supabase.server";
 
 export const dynamic = "force-dynamic";
 
@@ -12,13 +12,8 @@ type RecordRow = {
   } | null;
 };
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-);
-
 export default async function ExpansionListaPage() {
-  const { data, error } = await supabase
+  const { data, error } = await serviceSupabase()
     .from("records")
     .select("id, created_at, content")
     .order("created_at", { ascending: false });

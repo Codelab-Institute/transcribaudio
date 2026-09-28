@@ -1,8 +1,9 @@
 import Groq from "groq-sdk";
 import { NextRequest, NextResponse } from "next/server";
+import { parseBody } from "@/lib/api";
+import { serverEnv } from "@/lib/env";
 import { GROQ_MODEL } from "@/lib/groq";
-
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY ?? "" });
+import { textRequest } from "@/lib/schemas";
 
 const SYSTEM_PROMPT = `You are given a raw transcript from a spoken form response.
 Your job:
@@ -59,12 +60,12 @@ function parseJsonObject(text: string): ExtractedForm | null {
 }
 
 export async function POST(req: NextRequest) {
-  try {
-    const { text } = (await req.json()) as { text?: string };
-    if (!text || typeof text !== "string") {
-      return NextResponse.json({ error: "Missing text" }, { status: 400 });
-    }
+  const parsed = await parseBody(req, textRequest);
+  if ("response" in parsed) return parsed.response;
+  const { text } = parsed.data;
+  const groq = new Groq({ apiKey: serverEnv().GROQ_API_KEY });
 
+  try {
     const completion = await groq.chat.completions.create({
       model: GROQ_MODEL,
       temperature: 0.2,
@@ -77,13 +78,13 @@ export async function POST(req: NextRequest) {
     });
 
     const output = completion.choices[0]?.message?.content ?? "";
-    const parsed = parseJsonObject(output);
+    const extracted = parseJsonObject(output);
 
-    if (!parsed) {
+    if (!extracted) {
       return NextResponse.json({ error: "Failed to parse structured output" }, { status: 500 });
     }
 
-    return NextResponse.json(parsed);
+    return NextResponse.json(extracted);
   } catch (err: unknown) {
     const status = (err as { status?: number }).status;
     if (status === 429) {

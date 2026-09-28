@@ -1,0 +1,20 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    # Let new releases age before we pick them up (supply-chain buffer).
+    cooldown:
+      default-days: 3
+      semver-major-days: 7
+    open-pull-requests-limit: 5
+    groups:
+      # Batch routine minor/patch bumps into one PR; majors stay separate.
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: deps
